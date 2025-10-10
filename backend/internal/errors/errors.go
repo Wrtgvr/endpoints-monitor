@@ -2,7 +2,6 @@ package errs
 
 import (
 	"fmt"
-	"net/http"
 )
 
 type AppError struct {
@@ -22,14 +21,5 @@ func NewAppError(err error, msg, typ string, code int) *AppError {
 		Msg:  msg,
 		Type: typ,
 		Code: code,
-	}
-}
-
-func NewInternalError(err error) *AppError {
-	return &AppError{
-		Err:  err,
-		Msg:  "internal server error",
-		Type: TypeInternal,
-		Code: http.StatusInternalServerError,
 	}
 }
