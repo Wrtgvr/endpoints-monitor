@@ -133,7 +133,16 @@ func (s *RedisStorage) UpdateProjectAdminAPIKey(ctx context.Context, oldApiKey, 
 
 	// delete old, set new
 	pipe.Del(ctx, s.key_ProjectByAdminAPIKey(oldApiKey))
+	pipe.Del(ctx, s.key_ProjectKeyInfo(projectId, oldApiKey))
+	pipe.ZRem(ctx, s.key_ProjectAPIKeys(projectId), oldApiKey)
 	pipe.HSet(ctx, s.key_ProjectByAdminAPIKey(newApiKey), "id", projectId)
+	pipe.HSet(ctx, s.key_ProjectKeyInfo(projectId, newApiKey),
+		"type", "admin",
+		"createdAt", time.Now().Format(time.RFC3339))
+	pipe.ZAdd(ctx, s.key_ProjectAPIKeys(projectId), redis.Z{
+		Score:  float64(time.Now().Unix()),
+		Member: newApiKey,
+	})
 
 	//* exec
 	_, err := pipe.Exec(ctx)
@@ -149,7 +158,7 @@ func (s *RedisStorage) UpdateProjectAdminAPIKey(ctx context.Context, oldApiKey, 
 
 func (s *RedisStorage) AddReadonlyAPIKey(ctx context.Context, projectId, key string) *errs.AppError {
 	//* check amount of keys
-	n, err := s.client.ZCard(ctx, s.key_ProjectsReadOnlyAPIKeys(projectId)).Result()
+	n, err := s.client.ZCard(ctx, s.key_ProjectAPIKeys(projectId)).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return errs.NewNotFound(err,
@@ -163,21 +172,35 @@ func (s *RedisStorage) AddReadonlyAPIKey(ctx context.Context, projectId, key str
 		return errs.NewConflict(nil, fmt.Sprintf("A project cannot have more than %d read-only api keys", s.maxReadOnlyKeys))
 	}
 
-	//* add new key
-	err = s.client.ZAdd(ctx, s.key_ProjectsReadOnlyAPIKeys(projectId), redis.Z{
+	//* prepare pipeline
+	pipe := s.client.TxPipeline()
+	pipe.ZAdd(ctx, s.key_ProjectAPIKeys(projectId), redis.Z{
 		Score:  float64(time.Now().Unix()),
 		Member: key,
-	}).Err()
+	})
+	pipe.HSet(ctx, s.key_ProjectKeyInfo(projectId, key),
+		"type", "read_only",
+		"createdAt", time.Now().Format(time.RFC3339))
+
+	//* exec
+	_, err = pipe.Exec(ctx)
 	if err != nil {
 		return errs.NewInternalError(
-			fmt.Errorf("failed to add read-only key, project_id=%s, err=%w",
-				projectId, err))
+			fmt.Errorf("failed to add read-only api key: project_id=%s, err=%w", projectId, err))
 	}
+
 	return nil
 }
 
 func (s *RedisStorage) RemoveReadonlyAPIKey(ctx context.Context, projectId, key string) *errs.AppError {
-	err := s.client.ZRem(ctx, s.key_ProjectsReadOnlyAPIKeys(projectId), key).Err()
+	//* prepare pipeline
+	pipe := s.client.TxPipeline()
+
+	pipe.ZRem(ctx, s.key_ProjectAPIKeys(projectId), key)
+	pipe.HDel(ctx, s.key_ProjectKeyInfo(projectId, key))
+
+	//* exec
+	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return errs.NewInternalError(
 			fmt.Errorf("failed to remove read-only key, project_id=%s, err=%w",

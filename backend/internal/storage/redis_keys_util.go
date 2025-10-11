@@ -16,9 +16,14 @@ func (s RedisStorage) key_ProjectByAdminAPIKey(apiKey string) string {
 	return fmt.Sprintf("project_api_key:%s", apiKey)
 }
 
+// HSet
+func (s RedisStorage) key_ProjectKeyInfo(projectId, apiKey string) string {
+	return fmt.Sprintf("project:%s:keys:%s", projectId, apiKey)
+}
+
 // ZSet
-func (s RedisStorage) key_ProjectsReadOnlyAPIKeys(projectId string) string {
-	return fmt.Sprintf("project_readonly_keys:%s", projectId)
+func (s RedisStorage) key_ProjectAPIKeys(projectId string) string {
+	return fmt.Sprintf("project:%s:keys", projectId)
 }
 
 //* endpoints
