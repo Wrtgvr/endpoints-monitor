@@ -78,10 +78,10 @@ func (s *RedisStorage) GetProjectIDByAPIKey(ctx context.Context, apiKey string) 
 		if errors.Is(err, redis.Nil) {
 			return "", errs.NewNotFound(
 				err,
-				fmt.Sprintf("project with given admin api key not found, key=%s", apiKey))
+				"project with given admin api key not found")
 		}
 		return "", errs.NewInternalError(
-			fmt.Errorf("failed to get get project id by admin api key, key=%s err=%w", apiKey, err))
+			fmt.Errorf("failed to get get project id by admin api key, err=%w", err))
 	}
 
 	return id, nil
