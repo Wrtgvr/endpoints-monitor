@@ -19,6 +19,7 @@ type EndpointsStorage interface {
 	UpdateProjectAdminAPIKey(ctx context.Context, oldApiKey, newApiKey, projectId string) (appErr *errs.AppError)
 	AddReadonlyAPIKey(ctx context.Context, projectId, key string) *errs.AppError
 	RemoveReadonlyAPIKey(ctx context.Context, projectId, key string) *errs.AppError
+	GetReadonlyKeys(ctx context.Context, projectId string) (readOnlyKeys []string, appErr *errs.AppError)
 	//* Endpoints
 	GetEndpoints(ctx context.Context, projectId, endpointId string) (endpoints []*domain.Endpoint, appErr *errs.AppError)
 	GetEndpointsForMonitoring(ctx context.Context, projectId string) (endpointsInfo []*domain.EndpointInfo, appErr *errs.AppError)

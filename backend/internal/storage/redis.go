@@ -15,6 +15,11 @@ import (
 	errs "github.com/wrtgvr/websites-monitor/internal/errors"
 )
 
+const (
+	KeyTypeReadOnly = "read_only"
+	KeyTypeAdmin    = "admin"
+)
+
 type RedisStorage struct {
 	client          *redis.Client
 	maxEndpoints    int64
@@ -137,7 +142,7 @@ func (s *RedisStorage) UpdateProjectAdminAPIKey(ctx context.Context, oldApiKey, 
 	pipe.ZRem(ctx, s.key_ProjectAPIKeys(projectId), oldApiKey)
 	pipe.HSet(ctx, s.key_ProjectByAdminAPIKey(newApiKey), "id", projectId)
 	pipe.HSet(ctx, s.key_ProjectKeyInfo(projectId, newApiKey),
-		"type", "admin",
+		"type", KeyTypeAdmin,
 		"createdAt", time.Now().Format(time.RFC3339))
 	pipe.ZAdd(ctx, s.key_ProjectAPIKeys(projectId), redis.Z{
 		Score:  float64(time.Now().Unix()),
@@ -179,7 +184,7 @@ func (s *RedisStorage) AddReadonlyAPIKey(ctx context.Context, projectId, key str
 		Member: key,
 	})
 	pipe.HSet(ctx, s.key_ProjectKeyInfo(projectId, key),
-		"type", "read_only",
+		"type", KeyTypeReadOnly,
 		"createdAt", time.Now().Format(time.RFC3339))
 
 	//* exec
@@ -209,6 +214,41 @@ func (s *RedisStorage) RemoveReadonlyAPIKey(ctx context.Context, projectId, key 
 	return nil
 }
 
+func (s *RedisStorage) GetReadonlyKeys(ctx context.Context, projectId string) ([]string, *errs.AppError) {
+	keys, err := s.client.ZRange(ctx, s.key_ProjectAPIKeys(projectId), 0, -1).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, errs.NewNotFound(err,
+				fmt.Sprintf("project read-only api keys value not found: project_id=%s", projectId))
+		}
+		return nil, errs.NewInternalError(
+			fmt.Errorf("failed to get read-only api keys ids: err=%w", err))
+	}
+
+	readOnlyKeys := make([]string, 0)
+	failedKeys := 0
+	for _, key := range keys {
+		keyType, err := s.client.HGet(ctx, s.key_ProjectKeyInfo(projectId, key), "type").Result()
+		if err != nil {
+			log.Printf("WARN: failed to get key type, project_id=%s, err=%v\n", projectId, err)
+			failedKeys++
+			continue
+		}
+		if keyType != KeyTypeReadOnly && keyType != KeyTypeAdmin {
+			log.Printf("WARN: key has unknown type: key_type=%s\n", keyType)
+			failedKeys++
+			continue
+		}
+		readOnlyKeys = append(readOnlyKeys, key)
+	}
+
+	if failedKeys > 0 {
+		log.Printf("WARN: failed to load %d endpoints\n", failedKeys)
+	}
+
+	return readOnlyKeys, nil
+}
+
 //* Endpoints
 
 func (s *RedisStorage) GetEndpoints(ctx context.Context, projectId, endpointId string) ([]*domain.Endpoint, *errs.AppError) {
@@ -234,19 +274,19 @@ func (s *RedisStorage) GetEndpoints(ctx context.Context, projectId, endpointId s
 
 	//* get result
 	endpoints := make([]*domain.Endpoint, 0, len(ids))
-	failedEndpoints := make([]string, 0, len(ids))
+	failedEndpoints := 0
 	for _, id := range ids {
 		info, err := infoCmds[id].Result()
 		if err != nil {
 			log.Printf("WARN: failed to get endpoint, id=%s, err=%v\n", id, err)
-			failedEndpoints = append(failedEndpoints, id)
+			failedEndpoints++
 			continue
 		}
 
 		// check for required field
 		if info["url"] == "" {
 			log.Printf("WARN: endpoint does not have required URL field, id=%s, err=%v\n", id, err)
-			failedEndpoints = append(failedEndpoints, id)
+			failedEndpoints++
 			continue
 		}
 
@@ -265,8 +305,8 @@ func (s *RedisStorage) GetEndpoints(ctx context.Context, projectId, endpointId s
 		})
 	}
 
-	if len(failedEndpoints) > 0 {
-		log.Printf("WARN: failed to load %d endpoints\n", len(failedEndpoints))
+	if failedEndpoints > 0 {
+		log.Printf("WARN: failed to load %d endpoints\n", failedEndpoints)
 	}
 
 	return endpoints, nil
