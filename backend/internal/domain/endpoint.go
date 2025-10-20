@@ -7,12 +7,14 @@ type Endpoint struct {
 	Status       string
 	LastChecked  string
 	ResponseTime string
+	ProjectId    string
 }
 
 type EndpointInfo struct {
-	ID   string
-	Name string
-	URL  string
+	ID        string
+	Name      string
+	URL       string
+	ProjectId string
 }
 
 type EndpointStatus struct {
