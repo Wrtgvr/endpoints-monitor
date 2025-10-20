@@ -13,7 +13,7 @@ func (s RedisStorage) key_ProjectInfo(projectId string) string {
 
 // HSet
 func (s RedisStorage) key_ProjectByAdminAPIKey(apiKey string) string {
-	return fmt.Sprintf("project_api_key:%s", apiKey)
+	return fmt.Sprintf("admin_key:%s:project_id", apiKey)
 }
 
 // HSet

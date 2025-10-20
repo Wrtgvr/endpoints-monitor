@@ -7,15 +7,17 @@ import (
 )
 
 type RedisConfig struct {
-	Addr         string
-	Password     string
-	DB           int
-	MaxEndpoints int64
+	Addr            string
+	Password        string
+	DB              int
+	MaxEndpoints    int64
+	MaxReadOnlyKeys int64
 }
 
 const (
 	// constants
-	maxEndpoints = 100
+	maxEndpoints    = 100
+	maxReadOnlyKeys = 20
 	// env variables names
 	envVarRedisAddr = "REDIS_ADDR"
 	envVarRedisPass = "REDIS_PASS"
@@ -40,10 +42,11 @@ func GetRedisConfig(local bool) *RedisConfig {
 	}
 
 	return &RedisConfig{
-		Addr:         addr,
-		Password:     pass,
-		DB:           db,
-		MaxEndpoints: maxEndpoints,
+		Addr:            addr,
+		Password:        pass,
+		DB:              db,
+		MaxEndpoints:    maxEndpoints,
+		MaxReadOnlyKeys: maxReadOnlyKeys,
 	}
 }
 
